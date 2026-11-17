@@ -5,7 +5,8 @@
   "scripts": {
     "extract": "node extract.mjs ../気象予報士試験_過去問 work/txt",
     "parse": "node parse.js work/txt work/q.json",
-    "build": "npm run extract && npm run parse && node build-data.js"
+    "build": "npm run extract && npm run parse && node build-data.js",
+    "upload": "cf kv keys put data:data.js --namespace-id 3082396d801b4597b57d0d22eafcda52 --file ../app/public/data.js"
   },
   "dependencies": {
     "pdfjs-dist": "4.10.38"

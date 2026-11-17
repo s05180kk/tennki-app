@@ -1,4 +1,4 @@
-// q.json -> ../一問一答アプリ/data.js
+// q.json -> ../app/public/data.js
 const fs = require('fs'), path = require('path');
 const a = JSON.parse(fs.readFileSync(path.join(__dirname, 'work/q.json'), 'utf8'));
 const out = a.map(q => {
@@ -8,5 +8,5 @@ const out = a.map(q => {
   if (q.tfChoice) o.tfc = q.tfChoice.map(t => [t.label, t.text, t.correct ? 1 : 0]);
   return o;
 });
-fs.writeFileSync(path.join(__dirname, '../一問一答アプリ/data.js'), 'window.QDATA=' + JSON.stringify(out) + ';\n');
+fs.writeFileSync(path.join(__dirname, '../app/public/data.js'), 'window.QDATA=' + JSON.stringify(out) + ';\n');
 console.log('wrote', out.length, 'questions');

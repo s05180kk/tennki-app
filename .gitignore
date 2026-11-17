@@ -1,7 +1,17 @@
 # 試験問題（著作物・無断転載禁止）は含めない
 気象予報士試験_過去問/
-一問一答アプリ/data.js
+app/public/data.js
 
-# 生成物・依存
-tools/node_modules/
+# 依存・生成物
+node_modules/
 tools/work/
+app/dist/
+app/.cloudflare/
+app/.wrangler/
+
+# 秘密情報
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
+secrets.json

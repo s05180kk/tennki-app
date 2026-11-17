@@ -73,7 +73,8 @@ select{font-size:14px;padding:5px 8px;border-radius:8px;border:1px solid var(--l
 <script src="data.js"></script>
 <script>
 const D = window.QDATA || [];
-const PDF_BASE = '../';
+// 原本PDFはローカルで開いたときだけリンクする（サーバーには置かない）
+const PDF_BASE = location.protocol === 'file:' ? '../../' : null;
 const CIRC = '①②③④⑤';
 const LS_KEY = 'wxq-stats-v1', LS_PREF = 'wxq-pref-v1';
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
@@ -97,7 +98,7 @@ const OX = oxItems(), MC = mcItems();
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 const kindName = k => k === 'G' ? '一般知識' : '専門知識';
-const pdfLink = q => `<a href="${encodeURI(PDF_BASE + q.pdf)}#page=${q.p}" target="_blank" rel="noopener">原本PDF（${q.p}ページ）を開く</a>`;
+const pdfLink = q => !PDF_BASE ? `<span>原本：第${q.e}回 ${kindName(q.k)} ${q.p}ページ</span>` : `<a href="${encodeURI(PDF_BASE + q.pdf)}#page=${q.p}" target="_blank" rel="noopener">原本PDF（${q.p}ページ）を開く</a>`;
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 function pool() {
@@ -113,6 +114,7 @@ function pool() {
 
 // ---------- home ----------
 function home() {
+  screen = 'home';
   save(LS_PREF, pref);
   const base = pref.mode === 'ox' ? OX : MC;
   const answered = base.filter(it => stats[it.key]);
@@ -121,7 +123,7 @@ function home() {
   const weak = base.filter(it => stats[it.key] && stats[it.key].last === 0).length;
   const p = pool();
   document.getElementById('app').innerHTML = `
-  <header><h1>気象予報士 一問一答<small>学科 第${exams[0]}〜${exams[exams.length - 1]}回</small></h1></header>
+  <header><h1>気象予報士 一問一答<small>学科 第${exams[0]}〜${exams[exams.length - 1]}回</small></h1><span id="sync" class="note" data-s="${Sync.state}">☁ ${Sync.label}</span></header>
   <div class="card">
     <h2>モード</h2>
     <div class="mode">
@@ -165,7 +167,7 @@ function home() {
   </div>
   <div class="card note">
     正誤は各回の公式解答例から自動で割り出しています。図や表を使う問題は「原本PDF」で確認してください。
-    学習記録はこのブラウザに保存されます。
+    学習記録はこのブラウザに保存され、サイトとして開いたときは他の端末とも同期されます。
     <div style="margin-top:8px"><button class="btn ghost" id="reset">学習記録をリセット</button></div>
   </div>`;
   const $ = s => document.querySelector(s);
@@ -180,7 +182,7 @@ function home() {
   $('#order').onchange = e => { pref.order = e.target.value; home(); };
   $('#count').onchange = e => { pref.count = +e.target.value; home(); };
   $('#start').onclick = start;
-  $('#reset').onclick = () => { if (confirm('学習記録をすべて消去します。よろしいですか？')) { stats = {}; save(LS_KEY, stats); home(); } };
+  $('#reset').onclick = () => { if (confirm('学習記録をすべて消去します。よろしいですか？')) { stats = {}; save(LS_KEY, stats); Sync.reset(); home(); } };
 }
 
 // ---------- session ----------
@@ -194,10 +196,81 @@ function start() {
 }
 
 function record(key, ok) {
-  const s = stats[key] || {c: 0, w: 0};
+  const s = Object.assign({c: 0, w: 0}, stats[key]);
   ok ? s.c++ : s.w++; s.last = ok ? 1 : 0; s.t = Date.now();
   stats[key] = s; save(LS_KEY, stats);
+  Sync.mark(key);
 }
+
+// ---------- 端末間の同期（サーバー経由で開いたときだけ） ----------
+const Sync = (() => {
+  const LS_SYNC = 'wxq-sync-v1';
+  const st = Object.assign({pending: {}, resetAt: 0, resetDirty: false}, load(LS_SYNC, {}));
+  const enabled = /^https?:$/.test(location.protocol);
+  let state = enabled ? 'idle' : 'local', timer = null, busy = false;
+  const persist = () => save(LS_SYNC, st);
+  const labels = {local: '端末内のみに保存', idle: '同期待ち', syncing: '同期中…', ok: '同期済み', offline: 'オフライン（端末内に保存中）', login: 'ログインが切れました（再読み込みしてください）'};
+  const setState = s => { state = s; const el = document.getElementById('sync'); if (el) { el.textContent = '☁ ' + labels[s]; el.dataset.s = s; } };
+
+  function mergeIn(server) {
+    let changed = false;
+    if ((server.resetAt || 0) > st.resetAt) {
+      st.resetAt = server.resetAt;
+      for (const k of Object.keys(stats)) if ((stats[k].t || 0) <= st.resetAt) { delete stats[k]; changed = true; }
+    }
+    for (const [k, v] of Object.entries(server.entries || {})) {
+      if ((v.t || 0) <= st.resetAt) continue;
+      if (!stats[k] || (v.t || 0) > (stats[k].t || 0)) { stats[k] = v; changed = true; }
+    }
+    if (changed) { save(LS_KEY, stats); if (screen === 'home') home(); }
+    persist();
+  }
+
+  async function request(method, body, keepalive) {
+    const res = await fetch('/api/stats', {method, keepalive, credentials: 'same-origin', redirect: 'manual', cache: 'no-store',
+      headers: body ? {'Content-Type': 'application/json'} : {}, body: body ? JSON.stringify(body) : undefined});
+    if (res.type === 'opaqueredirect' || res.status === 401 || res.status === 403) throw Object.assign(new Error('login'), {login: true});
+    if (!res.ok || !(res.headers.get('Content-Type') || '').includes('json')) throw new Error('http ' + res.status);
+    return res.json();
+  }
+
+  async function run(keepalive) {
+    if (!enabled || busy) return;
+    busy = true; setState('syncing');
+    try {
+      const sending = Object.keys(st.pending);
+      if (sending.length || st.resetDirty) {
+        const entries = Object.fromEntries(sending.filter(k => stats[k]).map(k => [k, stats[k]]));
+        const merged = await request('PUT', {entries, resetAt: st.resetAt}, keepalive);
+        for (const k of sending) if (st.pending[k] && stats[k] && entries[k] && stats[k].t === entries[k].t) delete st.pending[k];
+        st.resetDirty = false;
+        mergeIn(merged);
+      } else {
+        mergeIn(await request('GET'));
+      }
+      setState(Object.keys(st.pending).length ? 'idle' : 'ok');
+    } catch (e) {
+      setState(e.login ? 'login' : (navigator.onLine ? 'offline' : 'offline'));
+    } finally { busy = false; persist(); }
+  }
+
+  const schedule = (ms = 2000) => { if (!enabled) return; clearTimeout(timer); timer = setTimeout(() => run(), ms); };
+  return {
+    get label() { return labels[state]; }, get state() { return state; },
+    start() {
+      if (!enabled) return;
+      run();
+      addEventListener('online', () => schedule(200));
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') { if (Object.keys(st.pending).length) { clearTimeout(timer); run(true); } }
+        else schedule(200);
+      });
+    },
+    mark(key) { st.pending[key] = 1; persist(); if (enabled) { setState('idle'); schedule(); } },
+    reset() { st.resetAt = Date.now(); st.resetDirty = true; st.pending = {}; persist(); schedule(0); },
+  };
+})();
+let screen = 'home';
 
 function header(it) {
   const q = it.q;
@@ -216,6 +289,7 @@ function highlight(text, label) {
 }
 
 function show() {
+  screen = 'quiz';
   if (S.i >= S.items.length) return finish();
   const it = S.items[S.i], q = it.q;
   let body;
@@ -311,6 +385,7 @@ document.addEventListener('keydown', e => {
 });
 
 home();
+Sync.start();
 </script>
 </body>
 </html>
