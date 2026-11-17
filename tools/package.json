@@ -1,0 +1,13 @@
+{
+  "name": "wxq-tools",
+  "private": true,
+  "description": "気象予報士試験の過去問PDFから一問一答アプリ用データを生成するスクリプト",
+  "scripts": {
+    "extract": "node extract.mjs ../気象予報士試験_過去問 work/txt",
+    "parse": "node parse.js work/txt work/q.json",
+    "build": "npm run extract && npm run parse && node build-data.js"
+  },
+  "dependencies": {
+    "pdfjs-dist": "4.10.38"
+  }
+}

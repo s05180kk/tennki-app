@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>気象予報士 一問一答</title>
+<style>
+:root{
+  --bg:#f5f7fa; --card:#fff; --text:#1d2433; --muted:#667085; --line:#e3e8ef;
+  --accent:#2563eb; --accent-weak:#e8efff; --ok:#16a34a; --ok-weak:#e7f7ed; --ng:#dc2626; --ng-weak:#fdecec;
+  --mark:#fff3b0;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0f141c; --card:#171e29; --text:#e6eaf0; --muted:#98a2b3; --line:#2a3342;
+    --accent:#6b9bff; --accent-weak:#1c2a45; --ok:#4ade80; --ok-weak:#163322; --ng:#f87171; --ng-weak:#3a1c1c; --mark:#5a4a12; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Yu Gothic UI","Hiragino Sans","Meiryo",sans-serif;line-height:1.7}
+.wrap{max-width:760px;margin:0 auto;padding:16px}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 0 16px}
+h1{font-size:20px;margin:0}
+h1 small{font-weight:normal;color:var(--muted);font-size:13px;margin-left:6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
+.card h2{font-size:15px;margin:0 0 10px;color:var(--muted);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer;user-select:none}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn{border:none;border-radius:10px;padding:10px 18px;font-size:15px;cursor:pointer;background:var(--accent);color:#fff;font-weight:600}
+.btn.sub{background:var(--accent-weak);color:var(--accent)}
+.btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+.btn:disabled{opacity:.4;cursor:default}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat{background:var(--bg);border-radius:10px;padding:10px;text-align:center}
+.stat b{display:block;font-size:20px}
+.stat span{font-size:12px;color:var(--muted)}
+.mode{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mode button{text-align:left;border:2px solid var(--line);background:var(--card);color:var(--text);border-radius:12px;padding:12px;cursor:pointer}
+.mode button.on{border-color:var(--accent);background:var(--accent-weak)}
+.mode b{display:block;font-size:15px}
+.mode span{font-size:12px;color:var(--muted)}
+.meta{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted);margin-bottom:8px;gap:8px;flex-wrap:wrap}
+.tag{display:inline-block;background:var(--accent-weak);color:var(--accent);border-radius:6px;padding:1px 8px;font-size:12px;margin-right:4px}
+.progress{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-bottom:14px}
+.progress i{display:block;height:100%;background:var(--accent);transition:width .2s}
+.qtext{white-space:pre-wrap;font-size:16px}
+.stem{white-space:pre-wrap;font-size:13.5px;color:var(--muted);border-left:3px solid var(--line);padding-left:10px;margin-top:12px}
+.statement{font-size:17px;font-weight:500;white-space:pre-wrap}
+mark{background:var(--mark);color:inherit;padding:0 2px;border-radius:3px}
+.ox{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.ox button{font-size:30px;padding:14px;border-radius:14px;border:2px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+.ox button:hover:not(:disabled){border-color:var(--accent)}
+.choices{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.choices button{text-align:left;font-size:15px;padding:10px 14px;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--text);cursor:pointer;white-space:pre-wrap}
+.choices button:hover:not(:disabled){border-color:var(--accent)}
+button.right{border-color:var(--ok)!important;background:var(--ok-weak)!important}
+button.wrong{border-color:var(--ng)!important;background:var(--ng-weak)!important}
+.result{margin-top:14px;padding:12px 14px;border-radius:10px;font-size:15px}
+.result.ok{background:var(--ok-weak);color:var(--ok)}
+.result.ng{background:var(--ng-weak);color:var(--ng)}
+.result b{font-size:17px}
+.foot{display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:8px;flex-wrap:wrap}
+a{color:var(--accent)}
+.note{font-size:12px;color:var(--muted)}
+.list{font-size:14px}
+.list li{margin-bottom:6px}
+.kbd{font-size:11px;color:var(--muted)}
+select{font-size:14px;padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text)}
+@media (max-width:520px){.stats{grid-template-columns:repeat(2,1fr)}.mode{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script src="data.js"></script>
+<script>
+const D = window.QDATA || [];
+const PDF_BASE = '../';
+const CIRC = '①②③④⑤';
+const LS_KEY = 'wxq-stats-v1', LS_PREF = 'wxq-pref-v1';
+const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+let stats = load(LS_KEY, {});
+const exams = [...new Set(D.map(q => q.e))].sort((a, b) => a - b);
+const examLabel = Object.fromEntries(D.map(q => [q.e, q.pdf.split('/')[1].replace('_', ' ')]));
+let pref = Object.assign({mode: 'ox', exams: exams.slice(), kinds: ['G', 'S'], filter: 'all', order: 'random', count: 20}, load(LS_PREF, {}));
+
+// ---------- build item pools ----------
+function oxItems() {
+  const out = [];
+  for (const q of D) {
+    if (q.tf) q.tf.forEach(([l, t, c]) => out.push({key: `${q.id}:${l}`, q, label: l, text: t, correct: !!c}));
+    else if (q.tfc) q.tfc.forEach(([l, t, c]) => out.push({key: `${q.id}:${l}`, q, label: l, text: t, correct: !!c, choiceType: true}));
+  }
+  return out;
+}
+function mcItems() { return D.map(q => ({key: q.id, q, mc: true})); }
+const OX = oxItems(), MC = mcItems();
+
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+const kindName = k => k === 'G' ? '一般知識' : '専門知識';
+const pdfLink = q => `<a href="${encodeURI(PDF_BASE + q.pdf)}#page=${q.p}" target="_blank" rel="noopener">原本PDF（${q.p}ページ）を開く</a>`;
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+function pool() {
+  const base = pref.mode === 'ox' ? OX : MC;
+  return base.filter(it => pref.exams.includes(it.q.e) && pref.kinds.includes(it.q.k)).filter(it => {
+    const s = stats[it.key];
+    if (pref.filter === 'new') return !s;
+    if (pref.filter === 'weak') return s && s.w > 0 && s.last === 0;
+    if (pref.filter === 'missed') return s && s.w > 0;
+    return true;
+  });
+}
+
+// ---------- home ----------
+function home() {
+  save(LS_PREF, pref);
+  const base = pref.mode === 'ox' ? OX : MC;
+  const answered = base.filter(it => stats[it.key]);
+  const tot = answered.reduce((a, it) => a + stats[it.key].c + stats[it.key].w, 0);
+  const cor = answered.reduce((a, it) => a + stats[it.key].c, 0);
+  const weak = base.filter(it => stats[it.key] && stats[it.key].last === 0).length;
+  const p = pool();
+  document.getElementById('app').innerHTML = `
+  <header><h1>気象予報士 一問一答<small>学科 第${exams[0]}〜${exams[exams.length - 1]}回</small></h1></header>
+  <div class="card">
+    <h2>モード</h2>
+    <div class="mode">
+      <button data-mode="ox" class="${pref.mode === 'ox' ? 'on' : ''}"><b>○× 一問一答</b><span>正誤問題の各文を1問ずつ（${OX.length}問）</span></button>
+      <button data-mode="mc" class="${pref.mode === 'mc' ? 'on' : ''}"><b>五択 過去問</b><span>本番と同じ形式で1問ずつ（${MC.length}問）</span></button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>学習状況（${pref.mode === 'ox' ? '○×' : '五択'}）</h2>
+    <div class="stats">
+      <div class="stat"><b>${answered.length}</b><span>解いた問題 / ${base.length}</span></div>
+      <div class="stat"><b>${tot ? Math.round(cor / tot * 100) : 0}%</b><span>正答率</span></div>
+      <div class="stat"><b>${weak}</b><span>直近で不正解</span></div>
+      <div class="stat"><b>${base.length - answered.length}</b><span>未回答</span></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>出題範囲</h2>
+    <div class="row" style="margin-bottom:8px">
+      <span class="chip ${pref.kinds.includes('G') ? 'on' : ''}" data-kind="G">一般知識</span>
+      <span class="chip ${pref.kinds.includes('S') ? 'on' : ''}" data-kind="S">専門知識</span>
+    </div>
+    <div class="row" id="examChips">
+      <span class="chip" data-allexam="1">すべて</span>
+      ${exams.map(e => `<span class="chip ${pref.exams.includes(e) ? 'on' : ''}" data-exam="${e}" title="${esc(examLabel[e])}">第${e}回</span>`).join('')}
+    </div>
+    <div class="row" style="margin-top:12px">
+      <select id="filter">
+        <option value="all">すべての問題</option>
+        <option value="new">未回答のみ</option>
+        <option value="weak">直近で間違えた問題</option>
+        <option value="missed">一度でも間違えた問題</option>
+      </select>
+      <select id="order"><option value="random">ランダム</option><option value="seq">回・問題順</option></select>
+      <select id="count">${[10, 20, 50, 100, 0].map(n => `<option value="${n}">${n ? n + '問' : '全部'}</option>`).join('')}</select>
+    </div>
+    <div class="foot">
+      <span class="note">対象 ${p.length} 問</span>
+      <button class="btn" id="start" ${p.length ? '' : 'disabled'}>スタート</button>
+    </div>
+  </div>
+  <div class="card note">
+    正誤は各回の公式解答例から自動で割り出しています。図や表を使う問題は「原本PDF」で確認してください。
+    学習記録はこのブラウザに保存されます。
+    <div style="margin-top:8px"><button class="btn ghost" id="reset">学習記録をリセット</button></div>
+  </div>`;
+  const $ = s => document.querySelector(s);
+  $('#filter').value = pref.filter; $('#order').value = pref.order; $('#count').value = String(pref.count);
+  document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { pref.mode = b.dataset.mode; home(); });
+  document.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => {
+    const k = b.dataset.kind; pref.kinds = pref.kinds.includes(k) ? pref.kinds.filter(x => x !== k) : [...pref.kinds, k]; home(); });
+  document.querySelectorAll('[data-exam]').forEach(b => b.onclick = () => {
+    const e = +b.dataset.exam; pref.exams = pref.exams.includes(e) ? pref.exams.filter(x => x !== e) : [...pref.exams, e]; home(); });
+  $('[data-allexam]').onclick = () => { pref.exams = pref.exams.length === exams.length ? [] : exams.slice(); home(); };
+  $('#filter').onchange = e => { pref.filter = e.target.value; home(); };
+  $('#order').onchange = e => { pref.order = e.target.value; home(); };
+  $('#count').onchange = e => { pref.count = +e.target.value; home(); };
+  $('#start').onclick = start;
+  $('#reset').onclick = () => { if (confirm('学習記録をすべて消去します。よろしいですか？')) { stats = {}; save(LS_KEY, stats); home(); } };
+}
+
+// ---------- session ----------
+let S = null;
+function start() {
+  let items = pool();
+  if (pref.order === 'random') shuffle(items);
+  if (pref.count) items = items.slice(0, pref.count);
+  S = {items, i: 0, results: []};
+  show();
+}
+
+function record(key, ok) {
+  const s = stats[key] || {c: 0, w: 0};
+  ok ? s.c++ : s.w++; s.last = ok ? 1 : 0; s.t = Date.now();
+  stats[key] = s; save(LS_KEY, stats);
+}
+
+function header(it) {
+  const q = it.q;
+  return `<div class="meta"><span><span class="tag">${kindName(q.k)}</span>第${q.e}回 問${q.q}${it.mc ? '' : ` ${it.choiceType ? it.label : '(' + it.label + ')'}`}${q.fig ? ' <span class="tag">図表あり</span>' : ''}</span>
+    <span>${S.i + 1} / ${S.items.length}　<a href="#" id="quit">終了</a></span></div>
+    <div class="progress"><i style="width:${S.i / S.items.length * 100}%"></i></div>`;
+}
+
+// split full text: stem part (before "(a)") for context
+function stemOf(q) {
+  const i = q.full.search(/\n?\([a-eア-オ]\)\s?\S/);
+  return (i > 0 && !q.ctx) ? q.full.slice(0, i).trim() : q.full;
+}
+function highlight(text, label) {
+  return esc(text).replace(new RegExp(`\\(${label}\\)`, 'g'), `<mark>(${label})</mark>`);
+}
+
+function show() {
+  if (S.i >= S.items.length) return finish();
+  const it = S.items[S.i], q = it.q;
+  let body;
+  if (it.mc) {
+    const ch = q.ch ? Object.entries(q.ch) : CIRC.split('').map(c => [c, '']);
+    body = `<div class="qtext">${esc(q.full)}</div>
+      <div class="choices">${ch.map(([c, t], i) => `<button data-c="${i + 1}"><b>${c}</b> ${esc(t)}</button>`).join('')}</div>
+      <div class="kbd" style="margin-top:6px">キー 1〜5 で回答</div>`;
+  } else if (q.ctx || !it.text) {
+    body = `<div class="statement">下線部・空欄 <mark>(${esc(it.label)})</mark> の内容は正しい？</div>
+      <div class="qtext" style="margin-top:10px;font-size:15px">${highlight(q.full, it.label)}</div>`;
+  } else {
+    body = `<div class="statement">${esc(it.text)}</div>
+      <details class="stem"><summary>問題文（前提）を表示</summary>${esc(stemOf(q))}</details>`;
+  }
+  const ox = it.mc ? '' : `<div class="ox"><button data-ox="1">○<div class="kbd">正しい（←/O）</div></button><button data-ox="0">×<div class="kbd">誤り（→/X）</div></button></div>`;
+  const figNote = q.fig ? `<div class="note" style="margin-bottom:10px">📊 図・表を含む問題です（図中の文字が本文に混ざることがあります）→ ${pdfLink(q)}</div>` : '';
+  document.getElementById('app').innerHTML = `<div class="card">${header(it)}${figNote}${body}${ox}<div id="res"></div></div>`;
+  document.getElementById('quit').onclick = e => { e.preventDefault(); finish(); };
+  document.querySelectorAll('[data-ox]').forEach(b => b.onclick = () => answerOX(+b.dataset.ox === 1));
+  document.querySelectorAll('[data-c]').forEach(b => b.onclick = () => answerMC(+b.dataset.c));
+  S.answered = false;
+}
+
+function after(ok, html) {
+  S.answered = true;
+  const it = S.items[S.i];
+  record(it.key, ok);
+  S.results.push({it, ok});
+  document.getElementById('res').innerHTML = `<div class="result ${ok ? 'ok' : 'ng'}"><b>${ok ? '正解！' : '不正解'}</b>　${html}</div>
+    <div class="foot"><span class="note">${pdfLink(it.q)}</span><button class="btn" id="next">次へ（Enter）</button></div>`;
+  document.getElementById('next').onclick = next;
+  document.getElementById('next').focus();
+}
+function next() { S.i++; show(); }
+
+function answerOX(v) {
+  if (S.answered) return;
+  const it = S.items[S.i];
+  const ok = v === it.correct;
+  document.querySelectorAll('[data-ox]').forEach(b => {
+    b.disabled = true;
+    if ((+b.dataset.ox === 1) === it.correct) b.classList.add('right'); else if ((+b.dataset.ox === 1) === v) b.classList.add('wrong');
+  });
+  const q = it.q;
+  after(ok, `この文は <b>${it.correct ? '正しい（○）' : '誤り（×）'}</b>。　<span class="note">本問の正解：${q.ans.map(n => CIRC[n - 1]).join('または')}</span>`);
+}
+
+function answerMC(c) {
+  if (S.answered) return;
+  const it = S.items[S.i], q = it.q;
+  const ok = q.ac || q.ans.includes(c);
+  document.querySelectorAll('[data-c]').forEach(b => {
+    b.disabled = true; const n = +b.dataset.c;
+    if (q.ans.includes(n) || q.ac) b.classList.add('right'); else if (n === c) b.classList.add('wrong');
+  });
+  let msg = q.ac ? '本問は公式に「全員正解」扱いです。' : `正解は <b>${q.ans.map(n => CIRC[n - 1]).join(' または ')}</b>`;
+  if (q.tf) msg += `<div class="note" style="margin-top:4px">${q.tf.map(([l, t, c]) => `(${l}) ${c ? '正' : '誤'}`).join('　')}</div>`;
+  after(ok, msg);
+}
+
+function finish() {
+  const r = S.results, ok = r.filter(x => x.ok).length;
+  const wrong = r.filter(x => !x.ok);
+  document.getElementById('app').innerHTML = `<div class="card">
+    <h1 style="margin-bottom:6px">結果</h1>
+    <div class="stats" style="margin:12px 0">
+      <div class="stat"><b>${r.length}</b><span>解答数</span></div>
+      <div class="stat"><b>${ok}</b><span>正解</span></div>
+      <div class="stat"><b>${r.length - ok}</b><span>不正解</span></div>
+      <div class="stat"><b>${r.length ? Math.round(ok / r.length * 100) : 0}%</b><span>正答率</span></div>
+    </div>
+    ${wrong.length ? `<h2 style="font-size:15px">間違えた問題</h2><ul class="list">${wrong.map(({it}) => `<li>第${it.q.e}回 ${kindName(it.q.k)} 問${it.q.q}${it.mc ? '' : ' (' + esc(it.label) + ')'}：${esc((it.text || it.q.full).slice(0, 70))}… ${it.mc ? '' : `→ <b>${it.correct ? '○' : '×'}</b>`}　${pdfLink(it.q)}</li>`).join('')}</ul>` : '<p>全問正解です！</p>'}
+    <div class="foot">
+      <button class="btn ghost" id="home">ホームへ</button>
+      ${wrong.length ? '<button class="btn sub" id="retry">間違えた問題をもう一度</button>' : ''}
+      <button class="btn" id="again">続けて出題</button>
+    </div></div>`;
+  document.getElementById('home').onclick = home;
+  document.getElementById('again').onclick = start;
+  const rt = document.getElementById('retry');
+  if (rt) rt.onclick = () => { S = {items: shuffle(wrong.map(x => x.it)), i: 0, results: []}; show(); };
+}
+
+document.addEventListener('keydown', e => {
+  if (!S || !document.querySelector('#res')) return;
+  if (e.target.tagName === 'SELECT') return;
+  if (S.answered) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); next(); } return; }
+  const it = S.items[S.i];
+  if (it.mc) { const n = +e.key; if (n >= 1 && n <= 5) answerMC(n); }
+  else if (['ArrowLeft', 'o', 'O', '1'].includes(e.key)) answerOX(true);
+  else if (['ArrowRight', 'x', 'X', '2'].includes(e.key)) answerOX(false);
+});
+
+home();
+</script>
+</body>
+</html>
